@@ -15,9 +15,14 @@ static const uint8_t highLevelSensorPin = 2;
 
 static const int maximumPumpDurationInSeconds = 600;
 static const int minimumTimeBetweenPumpingsInSeconds = 3600;
+static const int minimumTimeBetweenStatusChecksInSeconds = 1;
+static const int minimumTimeBetweenLEDBlinksInSeconds = 1;
 
 bool pumpState = LOW;
+bool LEDBlinkState = LOW;
 time_t pumpStartTime = 0;
+time_t previousStatusTime = 0;
+time_t previousLEDBlinkTime = 0;
 
 Adafruit_MCP23008 mcp;
 
@@ -50,34 +55,37 @@ void setup() {
 }
 
 void loop() {
-  // Pump control
-  if (pumpHasBeenRunningTooLong()) {
-    turnPumpOff();
-  } else if (pumpIsOn() && bothSensorsAreLow()) {
-    turnPumpOff();
-  } else if (pumpHasNotActivatedInAWhile() && pumpIsOff() && bothSensorsAreHigh()) {
-    turnPumpOn();
-  }
+  time_t currentTime = now();
+  if (currentTime - previousStatusTime >= minimumTimeBetweenStatusChecksInSeconds) {
+    // Pump control
+    if (pumpHasBeenRunningTooLong()) {
+      turnPumpOff();
+    } else if (pumpIsOn() && bothSensorsAreLow()) {
+      turnPumpOff();
+    } else if (pumpHasNotActivatedInAWhile() && pumpIsOff() && bothSensorsAreHigh()) {
+      turnPumpOn();
+    }
 
-  // LED control
-  if (bothSensorsAreLow()) {
-    lightLED(greenLEDPin);
-  } else if (bothSensorsAreHigh()) {
-    lightLED(redLEDPin);
-  } else {
-    lightLED(yellowLEDPin);
-  }
+    // LED control
+    if (bothSensorsAreLow()) {
+      lightLED(greenLEDPin);
+    } else if (bothSensorsAreHigh()) {
+      lightLED(redLEDPin);
+    } else {
+      lightLED(yellowLEDPin);
+    }
 
-  delay(200);
+    previousStatusTime = currentTime;
+  }
 }
 
 bool pumpHasBeenRunningTooLong() {
-  if (pumpState == HIGH) {
-    if (pumpStartTime + maximumPumpDurationInSeconds <= now()) {
-      return true;
+  if (pumpIsOn()) {
+    if (pumpStartTime + maximumPumpDurationInSeconds > now()) {
+      return false;
     }
   }
-  return false;
+  return true;
 }
 
 bool pumpHasNotActivatedInAWhile() {
@@ -106,14 +114,14 @@ bool bothSensorsAreLow() {
 }
 
 bool pumpIsOff() {
-  if (pumpState == LOW) {
+  if (pumpState == HIGH) {
     return true;
   }
   return false;
 }
 
 bool pumpIsOn() {
-  if (pumpState == HIGH) {
+  if (pumpState == LOW) {
     return true;
   }
   return false;
@@ -121,12 +129,12 @@ bool pumpIsOn() {
 
 void turnPumpOff() {
   mcp.digitalWrite(pumpPin, HIGH);
-  pumpState = LOW;
+  pumpState = HIGH;
 }
 
 void turnPumpOn() {
   mcp.digitalWrite(pumpPin, LOW);
-  pumpState = HIGH;
+  pumpState = LOW;
   pumpStartTime = now();
 }
 
@@ -137,11 +145,15 @@ void lightLED(uint8_t ledPin)
   if (ledPin != redLEDPin) mcp.digitalWrite(redLEDPin, LOW);
 
   if (pumpIsOn()) {
-    mcp.digitalWrite(ledPin, LOW);
-    delay(200);
+    time_t currentTime = now();
+    if (currentTime - previousLEDBlinkTime >= minimumTimeBetweenLEDBlinksInSeconds) {
+      LEDBlinkState = (LEDBlinkState == LOW) ? HIGH : LOW;
+      mcp.digitalWrite(ledPin, LEDBlinkState);
+      previousLEDBlinkTime = currentTime;
+    }
+  } else {
+    mcp.digitalWrite(ledPin, HIGH);
   }
-
-  mcp.digitalWrite(ledPin, HIGH);
 }
 
 #endif
