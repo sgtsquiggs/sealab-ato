@@ -40,7 +40,7 @@ void lightLED(uint8_t ledPin);
 void setup() {
   mcp.begin();
 
-  adjustTime(minimumTimeBetweenPumpingsInSeconds);
+  adjustTime(minimumTimeBetweenPumpingsInSeconds - 10);
 
   mcp.pinMode(pumpPin, OUTPUT);
   mcp.pinMode(lowLevelSensorPin, INPUT);
@@ -50,19 +50,17 @@ void setup() {
   mcp.pinMode(redLEDPin, OUTPUT);
 
   turnPumpOff();
-
-  delay(1000);
 }
 
 void loop() {
   time_t currentTime = now();
   if (currentTime - previousStatusTime >= minimumTimeBetweenStatusChecksInSeconds) {
     // Pump control
-    if (pumpHasBeenRunningTooLong()) {
+    if (pumpIsOn() && pumpHasBeenRunningTooLong()) {
       turnPumpOff();
     } else if (pumpIsOn() && bothSensorsAreLow()) {
       turnPumpOff();
-    } else if (pumpHasNotActivatedInAWhile() && pumpIsOff() && bothSensorsAreHigh()) {
+    } else if (pumpIsOff() && pumpHasNotActivatedInAWhile() && bothSensorsAreHigh()) {
       turnPumpOn();
     }
 
@@ -81,11 +79,11 @@ void loop() {
 
 bool pumpHasBeenRunningTooLong() {
   if (pumpIsOn()) {
-    if (pumpStartTime + maximumPumpDurationInSeconds > now()) {
-      return false;
+    if (pumpStartTime + maximumPumpDurationInSeconds <= now()) {
+      return true;
     }
   }
-  return true;
+  return false;
 }
 
 bool pumpHasNotActivatedInAWhile() {
